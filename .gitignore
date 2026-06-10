@@ -1,0 +1,13 @@
+# gstack 本地浏览器 daemon（含 token）
+.gstack/
+
+# 实验抓包产物（含本机路径 / session ID）
+experiment/captured.log
+
+# 依赖与日志
+node_modules/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

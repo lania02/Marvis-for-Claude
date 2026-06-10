@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CC 可视化 · Agent 办公室</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">🏢</div>
+      <div>
+        <h1>CC 可视化 · Agent 办公室</h1>
+        <div class="sub">Claude Code 多 agent 实时协作看板</div>
+      </div>
+    </div>
+
+    <div class="run-meta">
+      <span class="run-pill" id="run-pill" data-status="idle">
+        <span class="dot"></span><span class="label">空闲</span>
+      </span>
+      <div class="stat"><b id="stat-agents">0</b><span>子 agent</span></div>
+      <div class="stat"><b id="stat-tools">0</b><span>工具调用</span></div>
+      <div class="stat"><b id="stat-session">—</b><span>楼层 · 会话</span></div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="actions">
+      <button class="btn primary" id="btn-demo">▶ 演示</button>
+      <button class="btn" id="btn-reset">清空</button>
+      <span class="conn" id="conn" data-on="false"><span class="dot"></span>连接</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <nav class="floors" id="floors">
+      <div class="floors-head">🛗 楼层</div>
+      <div class="floors-list" id="floors-list"></div>
+      <div class="floors-empty" id="floors-empty">暂无会话<br>等待 hook 接入…</div>
+      <div class="floors-new">
+        <input id="new-cwd" type="text" placeholder="项目路径…" spellcheck="false" />
+        <button class="btn primary" id="btn-new-session" title="在该路径下开一个可视化自管会话">➕ 新会话</button>
+        <div class="new-err" id="new-err"></div>
+      </div>
+    </nav>
+
+    <section class="office">
+      <div class="office-head">
+        <h2>🏢 办公室实况</h2>
+        <span class="hint" id="office-path">主控 PM 拆解任务，子 agent 并行执行 · agent_id 精确归属</span>
+      </div>
+      <div id="office-stage"></div>
+      <div class="prompt-bar" id="prompt-bar" hidden>
+        <div class="pb-status" id="pb-status">💬 驻场会话 · 可直接派发指令</div>
+        <div class="pb-row">
+          <textarea id="pb-input" rows="2" placeholder="给这间办公室的经理下指令…(Enter 发送,Shift+Enter 换行)"></textarea>
+          <button class="btn primary" id="pb-send">📨 派发</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="card">
+        <h3>📋 当前任务</h3>
+        <div class="prompt-body empty-text" id="prompt-body">等待用户指令…</div>
+      </div>
+      <div class="card">
+        <h3>⚡ 实时活动日志</h3>
+        <div class="feed" id="feed"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script src="sprites.js"></script>
+  <script src="dialogue.js"></script>
+  <script src="office.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

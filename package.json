@@ -1,0 +1,13 @@
+{
+  "name": "cc-visualization",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code 多 agent 实时可视化 · 办公室视图（受腾讯马维斯启发）",
+  "scripts": {
+    "start": "node server/server.mjs",
+    "install-hooks": "node install.mjs",
+    "uninstall-hooks": "node install.mjs --uninstall"
+  },
+  "engines": { "node": ">=18" }
+}

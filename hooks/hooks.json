@@ -1,0 +1,32 @@
+{
+  "_comment": "CC 可视化 hook 配置。type:http 直连本地服务（默认 http://127.0.0.1:4317/event），实测在 Claude Code 2.1.x 可用。服务未启动时连接失败为非阻塞，不影响你的会话。如需改端口，请同步修改下方所有 url 与服务的 CC_VIZ_PORT。",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "SubagentStart": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "SubagentStop": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event", "timeout": 5 } ] }
+    ]
+  }
+}

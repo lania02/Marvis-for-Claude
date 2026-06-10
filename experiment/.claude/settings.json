@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "SubagentStart": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "SubagentStop": [
+      { "matcher": ".*", "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "http", "url": "http://127.0.0.1:4317/event" } ] }
+    ]
+  }
+}
