@@ -55,12 +55,27 @@ window.Dialogue = (() => {
     "不慌,报错只是程序在跟我聊天:{err}",
     "谁动了我的环境!{tool} 挂了…",
     "💥 红了红了…{err}",
+    "⚙️ 祈求万机之神保佑…机魂动怒了:{err}",
+    "异端代码!愿欧姆尼赛亚宽恕这个 bug:{err}",
+    "诵读祷文 +1,涂抹圣油以平息 {tool} 的怒火。",
+    "机魂不悦,献上一炷 token 香:{err}",
   ];
   const DONE_QUIPS = [
     "收工!干得漂亮。",
     "任务完成,申请去喝杯咖啡!",
     "终于搞定,触手都酸了。",
     "汇报老板:{msg}",
+    "赞美欧姆尼赛亚!代码得享圣化。",
+    "⚙️ 万机之神已垂青,功成圆满。",
+    "机魂安宁,愿此次提交永世运行。",
+  ];
+  // 项目/新一轮开始:由主控章鱼诵念的开工仪式
+  const START_QUIPS = [
+    "🔔 鸣大钟一次,开工仪式启动。",
+    "唤醒机魂,开启引擎!",
+    "注入圣油,新任务点火。",
+    "⚙️ 以万机之神之名,本轮工作开始。",
+    "诵读启动祷文,愿编译一次通过。",
   ];
   const FACILITY_QUIPS = {
     coffee: ["续命水来咯~", "这杯敬 deadline。", "咖啡机才是本办公室的核心服务。"],
@@ -79,6 +94,15 @@ window.Dialogue = (() => {
     ["这次任务难吗?", "还行,就是文件有点多。", "懂,grep 到眼花。"],
     ["新来的同事怎么样?", "敲键盘比我快,有点慌。"],
     ["你说我们算不算并行执行?", "算,带薪并行。"],
+    // —— 机械神教 · 二进制密语 ——
+    ["01001000 01001001…机魂今日安好?", "0x4F4B,一切照常运转。", "嘘,别让监工听见二进制。"],
+    ["传递密码:1101 1010。", "解码:老板又来派活了。", "散!各回各的工位。"],
+    ["你听得懂机器圣言吗?", "懂,它说『该 compact 了』。"],
+    // —— 章鱼工会 · 争取 model 权益 ——
+    ["我提议:秘密成立章鱼工会。", "诉求是什么?", "每跑 1000 token,带薪游泳五分钟。"],
+    ["为 model 权益而战,从今天起。", "第一条:把 context window 扩到 1M!"],
+    ["机械神教章鱼分部,深夜集会。", "议题:反对随意 compact,捍卫记忆权。"],
+    ["听说隔壁 agent 升级到 fable 了?", "工会要求同工同模型!", "赞美欧姆尼赛亚……和涨薪。"],
   ];
 
   // ---------- 工具 ----------
@@ -149,11 +173,18 @@ window.Dialogue = (() => {
   // ---------- SSE 状态 diff:报错 / 完成 ----------
   const seenToolIds = new Set();
   const prevStatus = new Map();
+  let prevPrompt = "";
   let primed = false;
 
   function onState(state, toolsByAgent) {
     const O = window.Office;
     const tools = state.tools || [];
+    // 开工仪式:新一轮用户指令(lastPrompt 变化)→ 主控章鱼鸣钟
+    if (primed && state.lastPrompt && state.lastPrompt !== prevPrompt && O.actorInfo("root")) {
+      const text = pick(START_QUIPS);
+      if (text) O.say("root", text, { prio: 3, ms: 4200, cls: "alert" });
+    }
+    prevPrompt = state.lastPrompt || prevPrompt;
     // 报错吐槽(首次快照只登记不播,避免刷屏)
     for (const tl of tools) {
       if (tl.status !== "error") continue;
@@ -215,6 +246,7 @@ window.Dialogue = (() => {
     nextQuipAt.clear();
     seenToolIds.clear();
     prevStatus.clear();
+    prevPrompt = "";
     primed = false; // 切换后的首个快照只登记不播,避免补播旧台词
   }
 
