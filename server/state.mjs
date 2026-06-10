@@ -302,7 +302,12 @@ export function createStore() {
         root.status = "done";
         root.currentToolId = null;
         root.currentDir = null;
-        if (p.last_assistant_message) root.lastMessage = clip(p.last_assistant_message, 280);
+        if (p.last_assistant_message) {
+          root.lastMessage = clip(p.last_assistant_message, 280);
+          // 观察型会话(终端会话)的回复只能从这里拿:把本轮 assistant 终稿收进对话全文。
+          // 驻场会话的回复已由 stream-json(pushReply)逐条收录,这里跳过以免重复。
+          if (!s.managed) pushConvo(s, "assistant", clip(p.last_assistant_message, 8000));
+        }
         s.status = "done";
         pushFeed(s, { kind: "session", agent: ROOT, code: ev === "StopFailure" ? "feed.stopFail" : "feed.stopOk" });
         break;
