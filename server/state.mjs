@@ -211,7 +211,7 @@ export function createStore() {
     switch (ev) {
       case "SessionStart": {
         s.status = "running";
-        pushFeed(s, { kind: "session", text: `会话开始（${p.source || "startup"}）` });
+        pushFeed(s, { kind: "session", code: "feed.sessionStart", arg: p.source || "startup" });
         break;
       }
 
@@ -222,7 +222,7 @@ export function createStore() {
         pushConvo(s, "user", clip(p.prompt, 4000));
         const root = s.agents[ROOT];
         root.status = "working";
-        pushFeed(s, { kind: "prompt", agent: ROOT, text: `用户：${clip(p.prompt, 120)}` });
+        pushFeed(s, { kind: "prompt", agent: ROOT, code: "feed.prompt", arg: clip(p.prompt, 120) });
         break;
       }
 
@@ -230,7 +230,7 @@ export function createStore() {
         const a = ensureAgent(s, p);
         a.status = "working";
         a.startedAt = nowISO();
-        pushFeed(s, { kind: "spawn", agent: a.key, agentType: a.type, text: `子 agent 上线：${a.type}` });
+        pushFeed(s, { kind: "spawn", agent: a.key, agentType: a.type, code: "feed.spawn", arg: a.type });
         break;
       }
 
@@ -245,7 +245,7 @@ export function createStore() {
         const summary = summarizeInput(p.tool_name, p.tool_input);
         if (SPAWN_TOOLS.has(p.tool_name)) {
           a.spawnCount += 1;
-          pushFeed(s, { kind: "dispatch", agent: a.key, text: `派活 → ${summary}` });
+          pushFeed(s, { kind: "dispatch", agent: a.key, code: "feed.dispatch", arg: summary });
         }
         const tool = {
           id: p.tool_use_id || `${a.key}:${s.tools.length}`,
@@ -265,7 +265,7 @@ export function createStore() {
         a.currentToolId = tool.id;
         a.toolCount += 1;
         s.stats.totalTools += 1;
-        pushFeed(s, { kind: "tool", agent: a.key, tool: p.tool_name, text: `${p.tool_name}：${clip(summary, 100)}` });
+        pushFeed(s, { kind: "tool", agent: a.key, tool: p.tool_name, code: "feed.tool", arg: clip(summary, 100) });
         break;
       }
 
@@ -281,7 +281,7 @@ export function createStore() {
           tool.response = summarizeResponse(ok ? p.tool_response : p.error);
         }
         if (a.currentToolId === (p.tool_use_id || null)) a.currentToolId = null;
-        if (!ok) pushFeed(s, { kind: "error", agent: a.key, tool: p.tool_name, text: `失败：${p.tool_name}` });
+        if (!ok) pushFeed(s, { kind: "error", agent: a.key, tool: p.tool_name, code: "feed.error" });
         break;
       }
 
@@ -292,7 +292,7 @@ export function createStore() {
         a.currentToolId = null;
         a.currentDir = null;
         a.lastMessage = clip(p.last_assistant_message, 280);
-        pushFeed(s, { kind: "done", agent: a.key, agentType: a.type, text: `子 agent 完成：${a.type}` });
+        pushFeed(s, { kind: "done", agent: a.key, agentType: a.type, code: "feed.subDone", arg: a.type });
         break;
       }
 
@@ -304,7 +304,7 @@ export function createStore() {
         root.currentDir = null;
         if (p.last_assistant_message) root.lastMessage = clip(p.last_assistant_message, 280);
         s.status = "done";
-        pushFeed(s, { kind: "session", agent: ROOT, text: ev === "StopFailure" ? "会话异常结束" : "本轮完成" });
+        pushFeed(s, { kind: "session", agent: ROOT, code: ev === "StopFailure" ? "feed.stopFail" : "feed.stopOk" });
         break;
       }
 
@@ -312,12 +312,12 @@ export function createStore() {
         s.status = "done";
         s.ended = true;
         s.endedAt = nowISO();
-        pushFeed(s, { kind: "session", text: "会话结束" });
+        pushFeed(s, { kind: "session", code: "feed.sessionEnd" });
         break;
       }
 
       default:
-        pushFeed(s, { kind: "other", text: `事件：${ev}` });
+        pushFeed(s, { kind: "other", code: "feed.other", arg: ev });
     }
   }
 
@@ -418,7 +418,7 @@ export function createStore() {
       if (!s) return false;
       s.updatedAt = nowISO();
       pushConvo(s, "assistant", clip(text, 8000));
-      pushFeed(s, { kind: "reply", agent: ROOT, text: clip(text, 200) });
+      pushFeed(s, { kind: "reply", agent: ROOT, code: "feed.reply", arg: clip(text, 200) });
       return true;
     },
     reset: () => {

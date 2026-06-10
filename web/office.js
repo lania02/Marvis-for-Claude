@@ -196,8 +196,17 @@ window.Office = (() => {
 
     hintEl = document.createElement("div");
     hintEl.className = "office-hint";
-    hintEl.innerHTML = "🐙 章鱼员工待命中…<br>接入 Claude Code 或点右上角「▶ 演示」";
+    hintEl.innerHTML = window.I18N ? window.I18N.t("ui.hint") : "";
     overlay.appendChild(hintEl);
+
+    // 切换语言:更新提示语 + 重贴所有名牌(角色名随语言变)
+    window.I18N?.onChange(() => {
+      if (hintEl) hintEl.innerHTML = window.I18N.t("ui.hint");
+      for (const actor of actors.values()) {
+        const span = actor.nameEl.querySelector("span");
+        if (span) span.textContent = nameFor(actor.type);
+      }
+    });
 
     new ResizeObserver(layoutFit).observe(stage);
     layoutFit();

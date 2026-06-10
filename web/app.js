@@ -1,22 +1,21 @@
 // CC 可视化 · 前端:订阅 SSE,驱动像素办公室(office.js)与活动日志
 const $ = (s) => document.querySelector(s);
+const t = (k, p) => window.I18N.t(k, p); // i18n 短别名
 
-const NAME = {
-  main: "主控 PM",
-  "general-purpose": "通用执行",
-  Explore: "探索检索",
-  Plan: "方案规划",
-  "claude-code-guide": "CC 向导",
-  "code-reviewer": "代码评审",
-  "statusline-setup": "状态栏",
-};
 const TOOL_IC = {
   Bash: "💻", PowerShell: "💻", Read: "📖", Write: "📝", Edit: "✏️",
   NotebookEdit: "✏️", Grep: "🔎", Glob: "🗂️", WebFetch: "🌐", WebSearch: "🌐",
   Agent: "👥", Task: "👥",
 };
-const nameFor = (t) => NAME[t] || t || "子 agent";
+// agent type → 显示名:命中 role.* 字典则用译文,否则回退原始 type
+const nameFor = (type) => (I18N.has("role." + type) ? t("role." + type) : type || t("role.fallback"));
 const toolIcon = (n) => TOOL_IC[n] || "🔧";
+
+// feed 条目:服务端只发 code + 参数,文本在此按当前语言渲染(向后兼容旧 text 字段)
+function feedText(f) {
+  if (f.code) return t(f.code, { arg: f.arg ?? "", tool: f.tool ?? "" });
+  return f.text || "";
+}
 
 function hueFor(key) {
   if (!key || key === "root") return 22; // 主控用 Claude 官方橙
@@ -28,7 +27,7 @@ const colorFor = (key) => `hsl(${hueFor(key)} 62% 55%)`;
 
 function fmtTime(iso) {
   try {
-    return new Date(iso).toLocaleTimeString("zh-CN", { hour12: false });
+    return new Date(iso).toLocaleTimeString(I18N.lang === "zh" ? "zh-CN" : "en-US", { hour12: false });
   } catch {
     return "";
   }
@@ -59,14 +58,14 @@ function renderApprovals() {
   const list = [...approvals.values()];
   box.innerHTML = list
     .map((a) => {
-      const room = a.sessionId ? (a.sessionId === "demo" ? "演示" : a.sessionId.slice(0, 6)) : "?";
+      const room = a.sessionId ? (a.sessionId === "demo" ? t("ui.room.demo") : a.sessionId.slice(0, 6)) : "?";
       return `<div class="approval-card" data-id="${esc(a.id)}">
-        <div class="ac-head">⛔ 权限审批 <span class="ac-room">房间 ${esc(room)}</span></div>
-        <div class="ac-body"><b>${esc(a.toolName)}</b><code>${esc(a.summary || "(无参数)")}</code></div>
+        <div class="ac-head">${esc(t("ui.appr.head"))} <span class="ac-room">${esc(t("ui.appr.room", { room }))}</span></div>
+        <div class="ac-body"><b>${esc(a.toolName)}</b><code>${esc(a.summary || t("ui.appr.noArg"))}</code></div>
         <div class="ac-actions">
-          <button class="btn primary" data-act="allow">✅ 允许</button>
-          <button class="btn" data-act="always">✅ 本会话总是允许 ${esc(a.toolName)}</button>
-          <button class="btn deny" data-act="deny">🚫 拒绝</button>
+          <button class="btn primary" data-act="allow">${esc(t("ui.appr.allow"))}</button>
+          <button class="btn" data-act="always">${esc(t("ui.appr.always", { tool: a.toolName }))}</button>
+          <button class="btn deny" data-act="deny">${esc(t("ui.appr.deny"))}</button>
         </div>
       </div>`;
     })
@@ -134,13 +133,13 @@ function renderFloors(index) {
             freshSids.has(s.sessionId) ? "new" : "",
           ].filter(Boolean).join(" ");
           const st = s.status === "running" ? "running" : s.ended ? "ended" : s.status;
-          const label = s.sessionId === "demo" ? "演示" : s.sessionId.slice(0, 6);
+          const label = s.sessionId === "demo" ? t("ui.room.demo") : s.sessionId.slice(0, 6);
           return `<button class="${cls}" data-sid="${esc(s.sessionId)}" data-status="${st}"
             title="${esc(s.lastPrompt || s.sessionId)}">
             <span class="dot"></span>
             <span class="rid">${s.managed ? "💬" : ""}${esc(label)}</span>
             <span class="rmeta">🐙${s.agentCount} 🔧${s.totalTools}</span>
-            ${freshSids.has(s.sessionId) ? '<span class="badge">新</span>' : ""}
+            ${freshSids.has(s.sessionId) ? `<span class="badge">${esc(t("ui.room.new"))}</span>` : ""}
           </button>`;
         })
         .join("");
@@ -170,7 +169,7 @@ function handleMsg(msg) {
   if (msg.kind === "approval") {
     approvals.set(msg.approval.id, msg.approval);
     renderApprovals();
-    Office.say("root", "⛔ 有操作等你审批!", { prio: 4, ms: 6000, cls: "alert" });
+    Office.say("root", t("ui.appr.toast"), { prio: 4, ms: 6000, cls: "alert" });
     return;
   }
   if (msg.kind === "approval_done") {
@@ -233,11 +232,11 @@ function updatePromptBar(state) {
   bar.hidden = false;
   const ms = mstatus.get(state.sessionId);
   const st = $("#pb-status");
-  if (!managedOk) st.textContent = "⚠️ 未找到 claude CLI,无法派发";
-  else if (ms?.status === "dead") st.textContent = "💤 会话已休眠 · 发送将自动唤醒";
+  if (!managedOk) st.textContent = t("ui.pb.noClaude");
+  else if (ms?.status === "dead") st.textContent = t("ui.pb.dead");
   else if (state.status === "running" || ms?.status === "busy")
-    st.textContent = `🟢 运行中…${ms?.queued ? ` 队列 ${ms.queued} 条` : " 新指令将排队"}`;
-  else st.textContent = "💬 驻场会话 · 可直接派发指令";
+    st.textContent = ms?.queued ? t("ui.pb.queued", { n: ms.queued }) : t("ui.pb.running");
+  else st.textContent = t("ui.pb.idle");
 }
 
 async function sendPrompt() {
@@ -252,10 +251,10 @@ async function sendPrompt() {
       body: JSON.stringify({ sessionId: selected, prompt: text }),
     });
     const j = await r.json();
-    if (!r.ok) $("#pb-status").textContent = "⚠️ 派发失败:" + (j.error || r.status);
-    else Office.say("root", "收到,马上安排!", { prio: 3, ms: 2500 });
+    if (!r.ok) $("#pb-status").textContent = t("ui.pb.sendFail", { err: j.error || r.status });
+    else Office.say("root", t("ui.pb.received"), { prio: 3, ms: 2500 });
   } catch {
-    $("#pb-status").textContent = "⚠️ 网络错误";
+    $("#pb-status").textContent = t("ui.pb.netErr");
   }
 }
 
@@ -264,12 +263,12 @@ async function createManagedSession() {
   const err = $("#new-err");
   const cwd = cwdInput.value.trim() || (selected && cache.get(selected)?.cwd) || "";
   if (!cwd) {
-    err.textContent = "请输入项目路径(或先选中一个会话以复用其路径)";
+    err.textContent = t("ui.new.needCwd");
     return;
   }
   const btn = $("#btn-new-session");
   btn.disabled = true;
-  err.textContent = "⏳ 启动中…";
+  err.textContent = t("ui.new.starting");
   try {
     const r = await fetch("/api/session", {
       method: "POST",
@@ -289,7 +288,7 @@ async function createManagedSession() {
       selectSession(j.sessionId);
     }
   } catch {
-    err.textContent = "⚠️ 网络错误";
+    err.textContent = t("ui.pb.netErr");
   }
   btn.disabled = false;
 }
@@ -310,11 +309,11 @@ function renderConvo(state) {
   box.innerHTML = entries
     .map(
       (e) => `<div class="convo-item" data-role="${e.role}">
-        <div class="ci-meta">${e.role === "user" ? "🧑 你" : "🤖 Claude"} · ${fmtTime(e.at)}</div>
+        <div class="ci-meta">${esc(e.role === "user" ? t("ui.convo.you") : t("ui.convo.claude"))} · ${fmtTime(e.at)}</div>
         <div class="ci-text">${esc(e.text)}</div>
       </div>`
     )
-    .join("") || `<div class="convo-empty">还没有对话,在下方输入框给经理下第一条指令吧</div>`;
+    .join("") || `<div class="convo-empty">${esc(t("ui.convo.empty"))}</div>`;
   if (entries.length !== lastConvoLen && (atBottom || lastConvoLen === -1)) box.scrollTop = box.scrollHeight;
   lastConvoLen = entries.length;
 }
@@ -327,9 +326,9 @@ function render(state) {
     $("#stat-agents").textContent = "0";
     $("#stat-tools").textContent = "0";
     $("#run-pill").dataset.status = "idle";
-    $("#run-pill").querySelector(".label").textContent = "空闲";
-    $("#office-path").textContent = "等待会话接入…";
-    $("#prompt-body").textContent = "等待用户指令…";
+    $("#run-pill").querySelector(".label").textContent = t("ui.status.idle");
+    $("#office-path").textContent = t("ui.office.waiting");
+    $("#prompt-body").textContent = t("ui.task.waiting");
     $("#prompt-body").classList.add("empty-text");
     $("#feed").innerHTML = "";
     return;
@@ -341,12 +340,12 @@ function render(state) {
   $("#stat-tools").textContent = state.stats?.totalTools ?? 0;
   $("#office-path").textContent = state.cwd
     ? `${state.cwd} · ${String(state.sessionId).slice(0, 8)}`
-    : `会话 ${String(state.sessionId).slice(0, 8)}`;
+    : t("ui.office.session", { id: String(state.sessionId).slice(0, 8) });
 
   const pill = $("#run-pill");
   pill.dataset.status = state.status;
   pill.querySelector(".label").textContent =
-    state.status === "running" ? "运行中" : state.status === "done" ? "已完成" : "空闲";
+    state.status === "running" ? t("ui.status.running") : state.status === "done" ? t("ui.status.done") : t("ui.status.idle");
 
   // 工具按 agent 归类
   const toolsByAgent = {};
@@ -366,7 +365,7 @@ function render(state) {
     pb.textContent = state.lastPrompt;
     pb.classList.remove("empty-text");
   } else {
-    pb.textContent = "等待用户指令…";
+    pb.textContent = t("ui.task.waiting");
     pb.classList.add("empty-text");
   }
 
@@ -378,7 +377,7 @@ function render(state) {
       return `<div class="feed-item" data-kind="${f.kind}">
         <span class="ftime">${fmtTime(f.at)}</span>
         <span class="agent-chip" style="--agent-color:${color}"></span>
-        <span class="ftext">${esc(f.text)}</span>
+        <span class="ftext">${esc(feedText(f))}</span>
       </div>`;
     })
     .join("");
@@ -403,6 +402,19 @@ function connect() {
 
 // ---- 启动 ----
 if (new URLSearchParams(location.search).get("debug") !== "sprites") {
+  I18N.apply(); // 静态文案首次替换
+  document.documentElement.lang = I18N.lang === "zh" ? "zh-CN" : "en";
+  const langBtn = $("#btn-lang");
+  langBtn.textContent = t("ui.lang");
+  langBtn.addEventListener("click", () => I18N.setLang(I18N.lang === "zh" ? "en" : "zh"));
+  // 切换语言:静态文案由 I18N.apply() 处理,动态部分在此重渲染
+  I18N.onChange(() => {
+    langBtn.textContent = t("ui.lang");
+    renderFloors(lastIndex);
+    renderApprovals();
+    render(selected ? cache.get(selected) : null);
+  });
+
   Office.mount($("#office-stage"));
   $("#btn-demo").addEventListener("click", () => fetch("/api/demo", { method: "POST" }));
   $("#btn-reset").addEventListener("click", () => fetch("/api/reset", { method: "POST" }));
@@ -414,5 +426,6 @@ if (new URLSearchParams(location.search).get("debug") !== "sprites") {
       sendPrompt();
     }
   });
+  render(null); // 首屏占位文案(SSE 到达前)
   connect();
 }
