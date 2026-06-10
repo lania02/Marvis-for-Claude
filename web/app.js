@@ -51,6 +51,48 @@ const knownSids = new Set(); // 已见过的会话(新会话提示用)
 const freshSids = new Set(); // 待查看的新会话
 let managedOk = false; // server 端 claude CLI 是否可用
 const mstatus = new Map(); // sessionId -> {status, queued}(自管会话进程状态)
+const approvals = new Map(); // id -> {id, sessionId, toolName, summary, createdAt}(待审批)
+
+// ---- 审批卡 ----
+function renderApprovals() {
+  const box = $("#approvals");
+  const list = [...approvals.values()];
+  box.innerHTML = list
+    .map((a) => {
+      const room = a.sessionId ? (a.sessionId === "demo" ? "演示" : a.sessionId.slice(0, 6)) : "?";
+      return `<div class="approval-card" data-id="${esc(a.id)}">
+        <div class="ac-head">⛔ 权限审批 <span class="ac-room">房间 ${esc(room)}</span></div>
+        <div class="ac-body"><b>${esc(a.toolName)}</b><code>${esc(a.summary || "(无参数)")}</code></div>
+        <div class="ac-actions">
+          <button class="btn primary" data-act="allow">✅ 允许</button>
+          <button class="btn" data-act="always">✅ 本会话总是允许 ${esc(a.toolName)}</button>
+          <button class="btn deny" data-act="deny">🚫 拒绝</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+  box.querySelectorAll(".approval-card button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.closest(".approval-card").dataset.id;
+      const act = btn.dataset.act;
+      decideApproval(id, act === "deny" ? "deny" : "allow", act === "always");
+    });
+  });
+}
+
+async function decideApproval(id, behavior, always) {
+  approvals.delete(id); // 立即从 UI 摘掉,server 幂等
+  renderApprovals();
+  try {
+    await fetch("/api/approval/decide", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, behavior, always }),
+    });
+  } catch {
+    /* server 掉线时按钮无效,卡片已移除 */
+  }
+}
 
 function pickDefault(index) {
   let fallback = null;
@@ -67,6 +109,7 @@ function selectSession(sid) {
   if (sid === selected) return;
   selected = sid;
   freshSids.delete(sid);
+  lastConvoLen = -1; // 切会话后对话面板重新滚到底
   Office.reset();
   window.Dialogue?.reset?.();
   renderFloors(lastIndex);
@@ -124,8 +167,22 @@ function handleMsg(msg) {
     if (msg.sessionId === selected) updatePromptBar(cache.get(selected));
     return;
   }
+  if (msg.kind === "approval") {
+    approvals.set(msg.approval.id, msg.approval);
+    renderApprovals();
+    Office.say("root", "⛔ 有操作等你审批!", { prio: 4, ms: 6000, cls: "alert" });
+    return;
+  }
+  if (msg.kind === "approval_done") {
+    approvals.delete(msg.id);
+    renderApprovals();
+    return;
+  }
   if (msg.kind === "hello") {
     managedOk = !!msg.managedOk;
+    approvals.clear();
+    for (const a of msg.approvals || []) approvals.set(a.id, a);
+    renderApprovals();
     cache.clear();
     for (const [sid, st] of Object.entries(msg.states || {})) cache.set(sid, st);
     knownSids.clear();
@@ -212,12 +269,16 @@ async function createManagedSession() {
   }
   const btn = $("#btn-new-session");
   btn.disabled = true;
-  err.textContent = "⏳ 启动中…(首次约 5-15 秒)";
+  err.textContent = "⏳ 启动中…";
   try {
     const r = await fetch("/api/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ cwd }),
+      body: JSON.stringify({
+        cwd,
+        model: $("#new-model").value || undefined,
+        permissionMode: $("#new-perm").value || undefined,
+      }),
     });
     const j = await r.json();
     if (!r.ok) {
@@ -233,9 +294,35 @@ async function createManagedSession() {
   btn.disabled = false;
 }
 
+// ---- 对话全文面板(驻场会话) ----
+let lastConvoLen = -1;
+function renderConvo(state) {
+  const card = $("#convo-card");
+  const entries = state?.convo || [];
+  if (!state?.managed && !entries.length) {
+    card.hidden = true;
+    lastConvoLen = -1;
+    return;
+  }
+  card.hidden = false;
+  const box = $("#convo");
+  const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+  box.innerHTML = entries
+    .map(
+      (e) => `<div class="convo-item" data-role="${e.role}">
+        <div class="ci-meta">${e.role === "user" ? "🧑 你" : "🤖 Claude"} · ${fmtTime(e.at)}</div>
+        <div class="ci-text">${esc(e.text)}</div>
+      </div>`
+    )
+    .join("") || `<div class="convo-empty">还没有对话,在下方输入框给经理下第一条指令吧</div>`;
+  if (entries.length !== lastConvoLen && (atBottom || lastConvoLen === -1)) box.scrollTop = box.scrollHeight;
+  lastConvoLen = entries.length;
+}
+
 // ---- 渲染主流程(单个会话) ----
 function render(state) {
   updatePromptBar(state);
+  renderConvo(state);
   if (!state) {
     $("#stat-agents").textContent = "0";
     $("#stat-tools").textContent = "0";

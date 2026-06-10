@@ -154,8 +154,15 @@ export function createStore() {
       tools: [], // 按时间顺序
       feed: [], // 活动日志（最新在前）
       dirs: {}, // F3:出现过的工作目录(储物架箱子),dir -> {dir,label,count,lastAt}
+      convo: [], // 对话全文(时间顺序):{role:"user"|"assistant", at, text},供驻场会话面板用
       stats: { totalTools: 0, totalAgents: 0 },
     };
+  }
+
+  const MAX_CONVO = 60;
+  function pushConvo(s, role, text) {
+    s.convo.push({ role, at: nowISO(), text });
+    if (s.convo.length > MAX_CONVO) s.convo.splice(0, s.convo.length - MAX_CONVO);
   }
 
   function agentKeyOf(p) {
@@ -212,6 +219,7 @@ export function createStore() {
         s.status = "running";
         s.ended = false;
         s.lastPrompt = clip(p.prompt, 400);
+        pushConvo(s, "user", clip(p.prompt, 4000));
         const root = s.agents[ROOT];
         root.status = "working";
         pushFeed(s, { kind: "prompt", agent: ROOT, text: `用户：${clip(p.prompt, 120)}` });
@@ -404,11 +412,12 @@ export function createStore() {
       a.model = model;
       return true;
     },
-    // F2:自管会话的 assistant 回复落进活动日志
+    // F2:自管会话的 assistant 回复——feed 留摘要,convo 存全文
     pushReply: (sid, text) => {
       const s = sessions.get(sid);
       if (!s) return false;
       s.updatedAt = nowISO();
+      pushConvo(s, "assistant", clip(text, 8000));
       pushFeed(s, { kind: "reply", agent: ROOT, text: clip(text, 200) });
       return true;
     },

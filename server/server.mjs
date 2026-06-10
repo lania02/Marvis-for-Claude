@@ -8,9 +8,24 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
 import { createStore } from "./state.mjs";
 import { modelFor } from "./models.mjs";
-import { createManager } from "./managed.mjs";
+import { createManager, reapOrphans } from "./managed.mjs";
+
+// 大声失败:崩溃前把堆栈落盘(之前出现过无痕死亡,死也要留尸检报告)
+const CRASH_LOG = path.join(os.tmpdir(), "cc-viz-crash.log");
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (err) => {
+    const line = `[${new Date().toISOString()}] ${ev}: ${err?.stack || err}\n`;
+    console.error(line);
+    try {
+      fs.appendFileSync(CRASH_LOG, line);
+    } catch { /* ignore */ }
+    if (ev === "uncaughtException") process.exit(1);
+  });
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, "..", "web");
@@ -35,7 +50,13 @@ function broadcast(sid) {
 }
 
 function helloMsg() {
-  return { kind: "hello", index: store.index(), states: store.all(), managedOk: manager.available };
+  return {
+    kind: "hello",
+    index: store.index(),
+    states: store.all(),
+    managedOk: manager.available,
+    approvals: [...approvals.values()].filter((a) => !a.decision).map(publicApproval),
+  };
 }
 
 function broadcastHello() {
@@ -43,7 +64,36 @@ function broadcastHello() {
   for (const res of clients) sseSend(res, msg);
 }
 
+// ---- 审批通道:approve-mcp.mjs 转发的权限请求,等前端用户拍板 ----
+const approvals = new Map(); // id -> {id, sessionId, toolName, summary, input, createdAt, decision, waiters: []}
+const autoAllow = new Map(); // sessionId -> Set(toolName) "本会话总是允许"
+
+function approvalSummary(toolName, input) {
+  if (!input || typeof input !== "object") return "";
+  for (const k of ["command", "file_path", "pattern", "url", "query", "prompt", "description"]) {
+    if (typeof input[k] === "string" && input[k]) return input[k].slice(0, 200);
+  }
+  try {
+    return JSON.stringify(input).slice(0, 200);
+  } catch {
+    return "";
+  }
+}
+
+function publicApproval(a) {
+  return { id: a.id, sessionId: a.sessionId, toolName: a.toolName, summary: a.summary, createdAt: a.createdAt };
+}
+
+function settleApproval(a, decision) {
+  a.decision = decision;
+  for (const w of a.waiters.splice(0)) w(decision);
+  const msg = { kind: "approval_done", id: a.id, sessionId: a.sessionId, behavior: decision.behavior };
+  for (const res of clients) sseSend(res, msg);
+  setTimeout(() => approvals.delete(a.id), 10 * 60 * 1000).unref?.();
+}
+
 // ---- F2:自管会话(可视化内直接发指令) ----
+reapOrphans(); // 上次 server 异常退出留下的自管子进程,先清掉
 const managedIds = new Set(); // 自管 session_id;hook 进来时补打 managed 标
 const manager = createManager((kind, data) => {
   if (kind === "init") {
@@ -56,7 +106,7 @@ const manager = createManager((kind, data) => {
     const msg = { kind: "mstatus", sessionId: data.sessionId, status: data.status, queued: data.queued };
     for (const res of clients) sseSend(res, msg);
   }
-});
+}, { port: PORT });
 
 const isLocal = (req) => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress);
 const validSid = (s) => typeof s === "string" && /^[0-9a-f-]{8,40}$/i.test(s);
@@ -173,9 +223,10 @@ const server = http.createServer(async (req, res) => {
     if (!isLocal(req)) return json(res, 403, { error: "local_only" });
     if (!manager.available) return json(res, 501, { error: "claude_not_found" });
     const body = await readBody(req);
-    let cwd;
+    let cwd, model, permissionMode;
     try {
-      cwd = String(JSON.parse(body).cwd || "").trim();
+      ({ cwd, model, permissionMode } = JSON.parse(body));
+      cwd = String(cwd || "").trim();
     } catch {
       return json(res, 400, { error: "bad_json" });
     }
@@ -185,13 +236,86 @@ const server = http.createServer(async (req, res) => {
       return json(res, 400, { error: "cwd_not_dir" });
     }
     try {
-      const { sessionId } = await manager.createSession(cwd);
+      const { sessionId } = await manager.createSession(cwd, { model, permissionMode });
       store.ensureSession(sessionId, cwd); // 房间立即可见,等待第一条指令
       broadcast(sessionId);
       return json(res, 200, { sessionId });
     } catch (e) {
       return json(res, 500, { error: String(e.message || e) });
     }
+  }
+
+  // ---- 审批通道(approve-mcp.mjs ↔ 前端) ----
+  if (req.method === "POST" && url === "/api/approval/request") {
+    if (!isLocal(req)) return json(res, 403, { error: "local_only" });
+    const body = await readBody(req);
+    let sessionId, toolName, input;
+    try {
+      ({ sessionId, toolName, input } = JSON.parse(body));
+    } catch {
+      return json(res, 400, { error: "bad_json" });
+    }
+    toolName = String(toolName || "unknown").slice(0, 80);
+    if (autoAllow.get(sessionId)?.has(toolName)) {
+      return json(res, 200, { decision: { behavior: "allow" } }); // 命中"本会话总是允许"
+    }
+    const a = {
+      id: randomUUID(),
+      sessionId: sessionId || null,
+      toolName,
+      summary: approvalSummary(toolName, input),
+      createdAt: new Date().toISOString(),
+      decision: null,
+      waiters: [],
+    };
+    approvals.set(a.id, a);
+    const msg = { kind: "approval", approval: publicApproval(a) };
+    for (const c of clients) sseSend(c, msg);
+    return json(res, 200, { id: a.id });
+  }
+
+  if (req.method === "GET" && url === "/api/approval/wait") {
+    const id = new URLSearchParams(req.url.split("?")[1] || "").get("id");
+    const a = approvals.get(id);
+    if (!a) return json(res, 404, { error: "unknown_approval" });
+    if (a.decision) return json(res, 200, { decision: a.decision });
+    // 长轮询:挂 25 秒,有决定立刻返回
+    const timer = setTimeout(() => {
+      const i = a.waiters.indexOf(waiter);
+      if (i >= 0) a.waiters.splice(i, 1);
+      json(res, 200, { pending: true });
+    }, 25000);
+    const waiter = (decision) => {
+      clearTimeout(timer);
+      json(res, 200, { decision });
+    };
+    a.waiters.push(waiter);
+    req.on("close", () => {
+      clearTimeout(timer);
+      const i = a.waiters.indexOf(waiter);
+      if (i >= 0) a.waiters.splice(i, 1);
+    });
+    return;
+  }
+
+  if (req.method === "POST" && url === "/api/approval/decide") {
+    if (!isLocal(req)) return json(res, 403, { error: "local_only" });
+    const body = await readBody(req);
+    let id, behavior, message, always;
+    try {
+      ({ id, behavior, message, always } = JSON.parse(body));
+    } catch {
+      return json(res, 400, { error: "bad_json" });
+    }
+    const a = approvals.get(id);
+    if (!a) return json(res, 404, { error: "unknown_approval" });
+    if (a.decision) return json(res, 200, { ok: true }); // 重复点按,幂等
+    behavior = behavior === "allow" ? "allow" : "deny";
+    if (behavior === "allow" && always && a.sessionId) {
+      (autoAllow.get(a.sessionId) || autoAllow.set(a.sessionId, new Set()).get(a.sessionId)).add(a.toolName);
+    }
+    settleApproval(a, { behavior, message: message ? String(message).slice(0, 300) : undefined });
+    return json(res, 200, { ok: true });
   }
 
   if (req.method === "POST" && url === "/api/prompt") {

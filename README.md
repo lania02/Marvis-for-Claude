@@ -125,7 +125,10 @@ CC可视化/
 - **多会话楼层**：按 `session_id` 分会话、按 `cwd` 分楼层（左侧电梯导航），并发会话互不干扰；ended 会话 10 分钟后清理,上限 16 个按 LRU 淘汰（`server/state.mjs`）。
 - **模型徽章**：每个 agent 名牌显示当前模型（如 `fable-5`、`haiku-4.5`），server 端从 transcript JSONL 尾部提取（`server/models.mjs`；子 agent transcript 在 `<session目录>/subagents/agent-<id>.jsonl`）。
 - **储物架箱子**：工具调用涉及的目录化为货架纸箱,agent 换目录干活时会跑去搬对应箱子回工位,完工归还（`state.mjs` 的 `dirOf` + `office.js` 的 PICKING/还箱 FSM）。
-- **驻场会话（可视化内直接发指令）**：左侧「➕ 新会话」在指定路径 spawn 长驻 `claude -p` stream-json 进程（`server/managed.mjs`,默认 `--permission-mode acceptEdits`,文件顶部常量可改）;办公室下方对话条直接派发指令,回复以 💬 条目进活动日志;空闲 30 分钟自动休眠,再次发送用 `--resume` 唤醒。终端里开的会话仍是只读观察（无法向交互式终端注入输入）。
+- **驻场会话（可视化内直接发指令）**：左侧「➕ 新会话」在指定路径 spawn 长驻 `claude -p` stream-json 进程（`server/managed.mjs`），可选模型与权限模式;办公室下方对话条直接派发指令;空闲 30 分钟自动休眠,再次发送用 `--resume` 唤醒。终端里开的会话仍是只读观察（无法向交互式终端注入输入）。
+- **权限审批卡**：驻场会话挂载 `--permission-prompt-tool`（`server/approve-mcp.mjs`,零依赖 stdio MCP）;claude 需要权限的操作（如 `git push`）会在办公室下方弹出红色审批卡,点「允许 / 本会话总是允许 / 拒绝」,决定经长轮询回传——CLI 的权限弹窗体验完整搬进可视化。
+- **对话全文面板**：侧栏「💬 对话全文」按时间序显示你的指令与 assistant 完整回复（活动日志里只留 200 字摘要）,再也不会错过"需要你批准"这类关键信息。
+- **稳定性**：崩溃堆栈落盘到 `%TEMP%\cc-viz-crash.log`;自管子进程 PID 记录在临时文件,server 重启时自动回收孤儿进程。
 
 ## 已知边界 / 下一步
 

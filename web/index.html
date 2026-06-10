@@ -42,6 +42,20 @@
       <div class="floors-empty" id="floors-empty">暂无会话<br>等待 hook 接入…</div>
       <div class="floors-new">
         <input id="new-cwd" type="text" placeholder="项目路径…" spellcheck="false" />
+        <div class="new-opts">
+          <select id="new-model" title="模型">
+            <option value="">模型:默认</option>
+            <option value="opus">opus</option>
+            <option value="sonnet">sonnet</option>
+            <option value="haiku">haiku</option>
+          </select>
+          <select id="new-perm" title="权限模式">
+            <option value="acceptEdits">编辑放行+审批</option>
+            <option value="default">全部审批</option>
+            <option value="plan">plan 模式</option>
+            <option value="bypassPermissions">⚠ bypass</option>
+          </select>
+        </div>
         <button class="btn primary" id="btn-new-session" title="在该路径下开一个可视化自管会话">➕ 新会话</button>
         <div class="new-err" id="new-err"></div>
       </div>
@@ -53,6 +67,7 @@
         <span class="hint" id="office-path">主控 PM 拆解任务，子 agent 并行执行 · agent_id 精确归属</span>
       </div>
       <div id="office-stage"></div>
+      <div id="approvals"></div>
       <div class="prompt-bar" id="prompt-bar" hidden>
         <div class="pb-status" id="pb-status">💬 驻场会话 · 可直接派发指令</div>
         <div class="pb-row">
@@ -66,6 +81,10 @@
       <div class="card">
         <h3>📋 当前任务</h3>
         <div class="prompt-body empty-text" id="prompt-body">等待用户指令…</div>
+      </div>
+      <div class="card" id="convo-card" hidden>
+        <h3>💬 对话全文</h3>
+        <div class="convo" id="convo"></div>
       </div>
       <div class="card">
         <h3>⚡ 实时活动日志</h3>
