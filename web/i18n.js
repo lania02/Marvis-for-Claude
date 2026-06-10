@@ -16,6 +16,7 @@ window.I18N = (() => {
       "ui.btn.reset": "清空",
       "ui.conn": "连接",
       "ui.lang": "EN",
+      "ui.btn.ai.title": "AI 即兴台词:章鱼会根据真实工作日志即兴闲聊(haiku 生成,约 1 次/分钟;点击开关)",
       // —— 状态 ——
       "ui.status.idle": "空闲",
       "ui.status.running": "运行中",
@@ -102,6 +103,7 @@ window.I18N = (() => {
       "ui.btn.reset": "Clear",
       "ui.conn": "link",
       "ui.lang": "中",
+      "ui.btn.ai.title": "AI improv quips: octopuses gossip based on the real work log (haiku-generated, ~1/min; click to toggle)",
       "ui.status.idle": "Idle",
       "ui.status.running": "Running",
       "ui.status.done": "Done",

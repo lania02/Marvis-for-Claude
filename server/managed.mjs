@@ -49,7 +49,7 @@ export function reapOrphans() {
   writePids([]);
 }
 
-function resolveClaude() {
+export function resolveClaude() {
   try {
     const out = execSync("where claude", { encoding: "utf8", windowsHide: true });
     const lines = out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);

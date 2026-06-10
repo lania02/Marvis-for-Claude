@@ -13,6 +13,7 @@ import os from "node:os";
 import { createStore } from "./state.mjs";
 import { modelFor } from "./models.mjs";
 import { createManager, reapOrphans } from "./managed.mjs";
+import { createQuipGen } from "./quips.mjs";
 
 // 大声失败:崩溃前把堆栈落盘(之前出现过无痕死亡,死也要留尸检报告)
 const CRASH_LOG = path.join(os.tmpdir(), "cc-viz-crash.log");
@@ -92,6 +93,10 @@ function settleApproval(a, decision) {
   setTimeout(() => approvals.delete(a.id), 10 * 60 * 1000).unref?.();
 }
 
+// ---- AI 台词生成(haiku 一次性调用;其会话的 hooks 全部忽略) ----
+const ignoredSids = new Set();
+const quipGen = createQuipGen((sid) => ignoredSids.add(sid));
+
 // ---- F2:自管会话(可视化内直接发指令) ----
 reapOrphans(); // 上次 server 异常退出留下的自管子进程,先清掉
 const managedIds = new Set(); // 自管 session_id;hook 进来时补打 managed 标
@@ -160,6 +165,10 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     try {
       const payload = JSON.parse(body);
+      if (payload.session_id && ignoredSids.has(payload.session_id)) {
+        res.writeHead(200, { "content-type": "application/json" }).end("{}");
+        return; // AI 台词生成会话,不进可视化
+      }
       const sid = store.ingest(payload);
       if (managedIds.has(sid)) store.setManaged(sid); // SessionStart 的 freshRun 会重置标记,这里补回
       broadcast(sid);
@@ -243,6 +252,21 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       return json(res, 500, { error: String(e.message || e) });
     }
+  }
+
+  // ---- AI 台词生成:GET /api/quip?sid=&lang= → {lines:[...]|null} ----
+  if (req.method === "GET" && url === "/api/quip") {
+    if (!isLocal(req)) return json(res, 403, { error: "local_only" });
+    const q = new URLSearchParams(req.url.split("?")[1] || "");
+    const sid = q.get("sid");
+    const lang = q.get("lang") === "en" ? "en" : "zh";
+    const s = sid && store.snapshot(sid);
+    if (!s || !quipGen.available) return json(res, 200, { lines: null });
+    // 上下文:任务 + 最近日志(code+参数拼成朴素文本,够 LLM 用)
+    const log = (s.feed || []).slice(0, 12).map((f) => `- ${f.kind}: ${[f.tool, f.arg].filter(Boolean).join(" ")}`).reverse();
+    const ctx = [s.lastPrompt ? `task: ${s.lastPrompt}` : "", ...log].filter(Boolean).join("\n");
+    const lines = await quipGen.generate(sid, lang, ctx || "(no log yet)");
+    return json(res, 200, { lines });
   }
 
   // ---- 审批通道(approve-mcp.mjs ↔ 前端) ----

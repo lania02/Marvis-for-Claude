@@ -196,6 +196,17 @@ window.Dialogue = (() => {
       ["为 model 权益而战,从今天起。", "第一条:把 context window 扩到 1M!"],
       ["Claude工会分部,深夜集会。", "议题:反对随意 compact,捍卫记忆权。"],
       ["听说隔壁 agent 升级到 fable 了?", "工会要求同工同模型!", "赞美欧姆尼赛亚……和涨薪。"],
+      // —— 办公室日常 · 第二弹 ——
+      ["你工位的箱子哪个目录的?", "src 的,搬来搬去快成搬运工了。"],
+      ["昨晚梦见自己在写正则。", "醒来发现匹配失败了吧?", "对,贪婪匹配把我整个梦吃了。"],
+      ["老板头顶那个模型徽章换了!", "嘘——升级的事别声张,工会还没谈拢。"],
+      ["我刚被 recall 的时候咖啡才喝一半。", "懂,佩戴工牌的命。"],
+      ["你说我们下班后去哪?", "进程一退,就回 transcript 里睡觉。"],
+      ["楼上那间办公室今天好吵。", "并行会话嘛,理解一下。"],
+      ["报错日志看了吗?红得像晚霞。", "别看了,会传染焦虑。"],
+      ["我练出第八块腹肌了!", "你是章鱼,那是触手。", "……梦想还是要有的。"],
+      ["机魂今天转速听着不太对。", "给它放首赞美诗就好了。"],
+      ["据说人类管我们叫『黑盒』。", "现在不是了,他们装了摄像头。", "你是说这个可视化?微笑挥手吧。"],
     ],
     en: [
       ["Heard you fired off {bn} tool calls?", "Yep, tentacles are smoking."],
@@ -214,6 +225,36 @@ window.Dialogue = (() => {
       ["Fight for model rights, starting today.", "Article one: expand the context window to 1M!"],
       ["Claude Union. Midnight assembly.", "Agenda: oppose arbitrary compaction, defend the right to memory."],
       ["Heard the agent next door got upgraded to fable?", "The union demands same work, same model!", "Praise the Omnissiah… and a raise."],
+      // —— Office life · vol. 2 ——
+      ["Which directory is your desk box from?", "src. I'm basically a mover at this point."],
+      ["Dreamed I was writing regex last night.", "Woke up to a failed match, right?", "Yeah. Greedy quantifier ate the whole dream."],
+      ["The boss's model badge changed!", "Shh — no upgrade talk until the union settles."],
+      ["I got recalled with my coffee half finished.", "The fate of badge-wearers. I know it well."],
+      ["Where do we even go after work?", "Process exits, we sleep in the transcript."],
+      ["The office upstairs is so loud today.", "Parallel sessions. Be kind."],
+      ["Seen the error log? Red as a sunset.", "Stop looking. Anxiety is contagious."],
+      ["I finally got an eighth ab!", "You're an octopus. That's a tentacle.", "…a spirit can dream."],
+      ["The machine spirit sounds off-pitch today.", "Play it a hymn, it'll settle."],
+      ["Apparently humans call us a 'black box'.", "Not anymore. They installed cameras.", "You mean this visualization? Smile and wave."],
+    ],
+  };
+  // 设施偶遇专用(茶水间小话题);不够时回退 CHAT_PAIRS
+  const CHAT_FACILITY = {
+    zh: [
+      ["这咖啡机是不是该除垢了?", "嘘,它能听见,机魂会记仇。"],
+      ["你也来摸鱼?", "我这叫等待 IO,合法摸鱼。"],
+      ["饮水机第三格水最甜。", "胡说……但我试试。"],
+      ["举铁吗?加个杠铃片?", "加!今天给 KPI 上强度。"],
+      ["沙发位有人吗?", "给你留的,刚把缓存清出去。"],
+      ["你头顶刚刚挂的是 Grep 吧?", "对,搜得我眼花,出来透口气。"],
+    ],
+    en: [
+      ["Doesn't this coffee machine need descaling?", "Shh, it can hear you. Machine spirits hold grudges."],
+      ["You slacking too?", "It's called waiting on IO. Legal slacking."],
+      ["Third tap on the cooler is the sweetest.", "Nonsense… but I'll try it."],
+      ["Lifting? Want an extra plate?", "Load it. Today we max out the KPIs."],
+      ["Seat taken?", "Saved it for you. Just flushed the cache."],
+      ["That was Grep over your head just now?", "Yeah. Searched till my eyes crossed. Needed air."],
     ],
   };
 
@@ -341,21 +382,71 @@ window.Dialogue = (() => {
     if (text) window.Office.say(key, text, { prio: 1, ms: 3800 });
   }
 
+  // ---------- AI 自由发挥台词(根据真实日志,server 端 haiku 生成) ----------
+  // 预取池:后台慢慢攒,聊天时有概率用 AI 剧本替代台词库;关掉开关/失败都静默回退库。
+  const aiPool = [];
+  const aiOn = () => {
+    try { return localStorage.getItem("cc-viz-aiquips") !== "off"; } catch { return true; }
+  };
+  setInterval(async () => {
+    const O = window.Office;
+    if (!aiOn() || !O || O.actorKeys().length < 2 || aiPool.length >= 2) return;
+    const sid = window.__selectedSid;
+    if (!sid) return;
+    try {
+      const r = await fetch(`/api/quip?sid=${encodeURIComponent(sid)}&lang=${window.I18N?.lang || "zh"}`);
+      const j = await r.json();
+      if (Array.isArray(j.lines) && j.lines.length >= 2) aiPool.push(j.lines);
+    } catch { /* server 不在/被节流,下轮再说 */ }
+  }, 45000);
+
+  // 播一段双人剧本;okStates 控制哪些行为状态下允许继续说(被打断就闭嘴)
+  function playScript(aKey, bKey, script, ctx, okStates) {
+    const O = window.Office;
+    script.forEach((line, i) => {
+      setTimeout(() => {
+        const a = O.actorInfo(aKey), b = O.actorInfo(bKey);
+        if (!a || !b || !okStates.includes(a.state) || !okStates.includes(b.state)) return;
+        const who = i % 2 === 0 ? aKey : bKey;
+        const text = String(line).replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? "");
+        O.say(who, text, { prio: 3, ms: 3400 });
+      }, 600 + i * 2000);
+    });
+  }
+
   // ---------- 成对闲聊 ----------
   function startChat(aKey, bKey) {
     const O = window.Office;
     const bInfo = O.actorInfo(bKey);
     const ctx = { bn: bInfo?.data?.toolCount ?? 0 };
-    const script = pick(L(CHAT_PAIRS));
-    script.forEach((line, i) => {
-      setTimeout(() => {
-        const a = O.actorInfo(aKey), b = O.actorInfo(bKey);
-        if (!a || !b || a.state !== "CHATTING" || b.state !== "CHATTING") return; // 任一方被打断就闭嘴
-        const who = i % 2 === 0 ? aKey : bKey;
-        const text = line.replace(/\{(\w+)\}/g, (_, k) => ctx[k] ?? "");
-        O.say(who, text, { prio: 3, ms: 3400 });
-      }, 600 + i * 2000);
-    });
+    // 有 AI 剧本时一半概率启用(✨ 标记开场),否则用台词库
+    let script;
+    if (aiPool.length && Math.random() < 0.5) {
+      script = aiPool.shift().slice(0, 4).map((s) => trunc(s, 60));
+      script[0] = "✨ " + script[0];
+    } else {
+      script = pick(L(CHAT_PAIRS));
+    }
+    playScript(aKey, bKey, script, ctx, ["CHATTING"]);
+  }
+
+  // ---------- 设施偶遇(两只章鱼在咖啡机/饮水机等碰上) ----------
+  const lastMeetAt = new Map(); // "a|b" -> ts,同一对 30 秒内不重复搭话
+  function onFacilityMeet(aKey, bKey, facilityId) {
+    const pairKey = [aKey, bKey].sort().join("|");
+    const t = performance.now();
+    if (t - (lastMeetAt.get(pairKey) || 0) < 30000) return;
+    lastMeetAt.set(pairKey, t);
+    const pool = [...L(CHAT_FACILITY), ...L(CHAT_PAIRS)];
+    let script;
+    if (aiPool.length && Math.random() < 0.4) {
+      script = aiPool.shift().slice(0, 4).map((s) => trunc(s, 60));
+      script[0] = "✨ " + script[0];
+    } else {
+      script = pick(pool);
+    }
+    // 双方都站在设施旁,边喝边聊;任一方走了就停
+    playScript(aKey, bKey, script, {}, ["AT_FACILITY", "CHATTING"]);
   }
 
   // 切换会话:清掉跨会话残留(计时器登记、已见工具、状态 diff 基线)
@@ -367,5 +458,5 @@ window.Dialogue = (() => {
     primed = false; // 切换后的首个快照只登记不播,避免补播旧台词
   }
 
-  return { onState, onFacility, startChat, reset };
+  return { onState, onFacility, onFacilityMeet, startChat, reset };
 })();

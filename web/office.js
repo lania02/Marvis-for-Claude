@@ -52,19 +52,19 @@ window.Office = (() => {
   const BOX_SWAP_COOLDOWN = 10000; // 换箱节流:目录抖动时 10s 内不再跑货架
   const shortDir = (d) => (d && d.length > 10 ? d.slice(0, 9) + "…" : d || "");
 
-  // 漫游加权抽签 —— 原地动作(打游戏/发呆)权重高,减少满屋乱跑
+  // 漫游加权抽签 —— 闲聊权重调高(办公室就是要有人味),打游戏相应让位
   const WANDER = [
-    { kind: "game", w: 32 },
+    { kind: "game", w: 22 },
     { kind: "facility", id: "coffee", w: 14 },
     { kind: "facility", id: "cooler", w: 9 },
-    { kind: "facility", id: "lift", w: 7 },
-    { kind: "facility", id: "treadmill", w: 7 },
-    { kind: "facility", id: "sofa", w: 11 },
-    { kind: "daze", w: 8 },
-    { kind: "chat", w: 12 },
+    { kind: "facility", id: "lift", w: 6 },
+    { kind: "facility", id: "treadmill", w: 6 },
+    { kind: "facility", id: "sofa", w: 10 },
+    { kind: "daze", w: 7 },
+    { kind: "chat", w: 26 },
   ];
   // 各类停留时长(ms)
-  const DUR_IDLE = [22000, 48000];   // 多久才动一次(在工位歇着)
+  const DUR_IDLE = [15000, 34000];   // 多久才动一次(在工位歇着)
   const DUR_GAME = [20000, 42000];   // 打游戏一局
   const DUR_DAZE = [14000, 28000];   // 发呆
   const DUR_FACILITY = [16000, 32000]; // 喝咖啡/健身/打盹
@@ -495,8 +495,9 @@ window.Office = (() => {
       return;
     }
     if (pick.kind === "chat") {
+      // 打游戏的同事也能被拉来闲聊(放下手柄就聊)——大幅提高凑对成功率
       const peer = [...actors.values()].find(
-        (p) => p !== actor && p.beh.state === "SEATED_IDLE" && !p.beh.chatPeer && p.agentStatus !== "working"
+        (p) => p !== actor && (p.beh.state === "SEATED_IDLE" || p.beh.state === "SEATED_GAMING") && !p.beh.chatPeer && p.agentStatus !== "working"
       );
       if (!peer) { actor.beh.nextWanderAt = now() + rand(...DUR_RETRY); return; }
       actor.beh.chatPeer = peer.key;
@@ -543,7 +544,13 @@ window.Office = (() => {
       actor.flip = !!b.spot.flip;
       if (f.zOnSpot) actor.zOverride = Math.round(f.fy + f.el.height * SC) + 1;
       setAnim(actor, f.anim);
-      window.Dialogue?.onFacility?.(actor.key, f.id);
+      // 设施偶遇:有同事已经在这儿 → 自动搭话(茶水间才是社交主场)
+      const peerKey = [...(occupancy.get(f.id) || [])].find((k) => k !== actor.key);
+      if (peerKey) {
+        window.Dialogue?.onFacilityMeet?.(actor.key, peerKey, f.id);
+      } else {
+        window.Dialogue?.onFacility?.(actor.key, f.id);
+      }
     } else if (b.then === "chat") {
       b.state = "CHATTING";
       const peer = actors.get(b.chatPeer);

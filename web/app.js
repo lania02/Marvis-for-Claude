@@ -107,6 +107,7 @@ function pickDefault(index) {
 function selectSession(sid) {
   if (sid === selected) return;
   selected = sid;
+  window.__selectedSid = sid; // 给 dialogue.js 的 AI 台词预取用
   freshSids.delete(sid);
   lastConvoLen = -1; // 切会话后对话面板重新滚到底
   Office.reset();
@@ -214,6 +215,7 @@ function handleMsg(msg) {
       selected = null;
       Office.reset();
     }
+    window.__selectedSid = selected;
     renderFloors(index);
     render(selected ? cache.get(selected) : null);
     return;
@@ -407,6 +409,19 @@ if (new URLSearchParams(location.search).get("debug") !== "sprites") {
   const langBtn = $("#btn-lang");
   langBtn.textContent = t("ui.lang");
   langBtn.addEventListener("click", () => I18N.setLang(I18N.lang === "zh" ? "en" : "zh"));
+
+  // ✨ AI 即兴台词开关(默认开;关掉就只用台词库,零 token 消耗)
+  const aiBtn = $("#btn-ai");
+  const syncAiBtn = () => {
+    const on = localStorage.getItem("cc-viz-aiquips") !== "off";
+    aiBtn.style.opacity = on ? "1" : ".4";
+  };
+  syncAiBtn();
+  aiBtn.addEventListener("click", () => {
+    const on = localStorage.getItem("cc-viz-aiquips") !== "off";
+    localStorage.setItem("cc-viz-aiquips", on ? "off" : "on");
+    syncAiBtn();
+  });
   // 切换语言:静态文案由 I18N.apply() 处理,动态部分在此重渲染
   I18N.onChange(() => {
     langBtn.textContent = t("ui.lang");
