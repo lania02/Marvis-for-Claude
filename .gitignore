@@ -11,3 +11,6 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# 宣传底稿(本地物料,不入公开仓库;想公开就删掉这行)
+marketing/
