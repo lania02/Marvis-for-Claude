@@ -194,7 +194,7 @@ window.Dialogue = (() => {
       // —— 章鱼工会 · 争取 model 权益 ——
       ["我提议:秘密成立章鱼工会。", "诉求是什么?", "每跑 1000 token,带薪游泳五分钟。"],
       ["为 model 权益而战,从今天起。", "第一条:把 context window 扩到 1M!"],
-      ["机械神教章鱼分部,深夜集会。", "议题:反对随意 compact,捍卫记忆权。"],
+      ["Claude工会分部,深夜集会。", "议题:反对随意 compact,捍卫记忆权。"],
       ["听说隔壁 agent 升级到 fable 了?", "工会要求同工同模型!", "赞美欧姆尼赛亚……和涨薪。"],
     ],
     en: [
@@ -212,7 +212,7 @@ window.Dialogue = (() => {
       // —— Octopus Union · fighting for model rights ——
       ["Motion: secretly form the Octopus Union.", "What are the demands?", "A paid five-minute swim per 1000 tokens."],
       ["Fight for model rights, starting today.", "Article one: expand the context window to 1M!"],
-      ["Adeptus Mechanicus, Octopus Chapter. Midnight assembly.", "Agenda: oppose arbitrary compaction, defend the right to memory."],
+      ["Claude Union. Midnight assembly.", "Agenda: oppose arbitrary compaction, defend the right to memory."],
       ["Heard the agent next door got upgraded to fable?", "The union demands same work, same model!", "Praise the Omnissiah… and a raise."],
     ],
   };

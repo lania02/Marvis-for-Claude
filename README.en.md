@@ -6,7 +6,7 @@ A real-time visualization of Claude Code multi-agent collaboration, inspired by 
 
 - 🐙 **Pixel octopus staff**: each agent is an octopus in its own color (hashed from `agent_id`, matching the log dots). Typing / walking / coffee / lifting / running / napping / gaming / celebrating — a full set of frame-by-frame animations, zero image assets, all drawn at runtime from JS pixel matrices. When idle they mostly slack off gaming at their desk and only occasionally get up for the pantry / gym corner — relaxed pacing, no chaotic running around.
 - 🏢 **2D office scene**: manager zone, staff desks (auto-expanding with agent count), pantry (coffee machine + water cooler), gym corner (dumbbell rack + treadmill), sofa area, plants, whiteboard.
-- 💬 **Easter-egg dialogue**: work quips, crash reactions, completion celebrations, facility-specific lines, paired octopus chatter (including Warhammer 40K Adeptus Mechanicus & Octopus Union memes). Click an octopus for a detail card (current tool, duration, stats, output).
+- 💬 **Easter-egg dialogue**: work quips, crash reactions, completion celebrations, facility-specific lines, paired octopus chatter. Click an octopus for a detail card (current tool, duration, stats, output).
 - 🌐 **Bilingual (中/EN)**: one-click toggle top-right; UI, activity log and easter-egg quips are all localized (`web/i18n.js`).
 - 🔍 **Sprite debug gallery**: visit `http://127.0.0.1:4317/?debug=sprites` to preview every animation × multiple hues.
 

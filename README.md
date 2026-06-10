@@ -1,13 +1,10 @@
 # CC 可视化 · Agent 办公室
 
-> 🌐 [**English**](./README.en.md) · **简体中文**
-
 Claude Code 多 agent 实时协作可视化工具，灵感来自腾讯马维斯（Marvis）的"办公室"场景：把主控 PM 和并行的子 agent 拟人化成一间**像素风办公室**里的彩色 Claude Code 小章鱼员工——工作时坐在工位上敲键盘（头顶实时显示正在跑的工具），空闲时会自己溜达去喝咖啡、举铁、跑步机、沙发打盹，还会随机吐槽（嵌入真实的工具名/文件名/耗时/报错）、两只空闲章鱼碰上还会互相闲聊。让多 agent 的黑盒执行变得可读、可爱。
 
 - 🐙 **像素章鱼员工**：每个 agent 一只专属颜色的小章鱼（颜色由 `agent_id` 哈希生成，与日志色点一致），敲键盘 / 行走 / 喝咖啡 / 举铁 / 跑步 / 打盹 / 打游戏 / 庆祝全套逐帧动画，零图片资源——全部由 JS 像素矩阵运行时绘制。空闲时大概率窝在工位上打游戏摸鱼，偶尔才起身去茶水间/健身角，动作节奏舒缓不乱跑
 - 🏢 **2D 办公室场景**：经理区、员工工位（随 agent 数量自动扩展）、茶水间（咖啡机+饮水机）、健身角（哑铃架+跑步机）、沙发区、绿植、白板
-- 💬 **彩蛋对话**：工作吐槽、报错翻车、收工庆祝、设施专属台词、双章鱼成对闲聊（含战锤 40K 机械神教 & 章鱼工会梗）；点击章鱼可看详情卡（当前工具、耗时、统计、产出）
-- 🌐 **中英双语**：右上角一键切换,界面、活动日志、彩蛋台词全部本地化(`web/i18n.js`)
+- 💬 **彩蛋对话**：工作吐槽、报错翻车、收工庆祝、设施专属台词、双章鱼成对闲聊；点击章鱼可看详情卡（当前工具、耗时、统计、产出）
 - 🔍 **sprite 调试画廊**：访问 `http://127.0.0.1:4317/?debug=sprites` 可预览全部动画 × 多色相
 
 **零依赖**（纯 Node.js 标准库 + 原生前端），Windows / macOS / Linux 通用。
@@ -62,32 +59,6 @@ Claude Code 会话
 
 ---
 
-## 关键技术结论（已在 Claude Code 2.1.156 实测验证）
-
-最初的设计顾虑是"并行子 agent 共享 session ID、无法判断是哪个子 agent 在干活"。**实测发现这个坑在当前版本已不存在**：
-
-| 结论 | 证据 |
-|---|---|
-| 每次工具调用的 hook payload 都带 **`agent_id`**，子 agent 归属零歧义 | 两个并行子 agent 的 `echo` 分别带不同 `agent_id` |
-| 主 agent 的 `agent_id` 为空（即根节点）；它的 `Agent` 工具调用就是"派活" | tool=`Agent`，无 agent_id |
-| `SubagentStart` / `SubagentStop` 真实触发，都带 `agent_id` + `agent_type` | 2 启 2 停，各带独立 id |
-| `PreToolUse`/`PostToolUse` 带 `tool_use_id`（配对前后）+ `duration_ms`（时长）+ `tool_response`（结果） | — |
-| `SubagentStop` 还带 `last_assistant_message` + 子 agent 自己的 transcript 路径 | 可取产出物 |
-| **`type:"http"` hook 可用**：Claude Code 直接把事件 POST 到本地服务，无需每事件起子进程 | 实测真实会话事件全部到达 |
-| Windows 上 command/http hook 的 stdin/传输均正常（含 `Stop` 事件） | — |
-
-> 复现脚本见 `experiment/`：`hook-capture.mjs`（把真实 payload 抓到 `captured.log`）、`smoke.mjs`（仿真事件序列校验状态机）。
-
-实测拿到的真实 payload 字段（节选）：
-
-```
-PreToolUse  → agent_id, agent_type, tool_name, tool_input, tool_use_id, permission_mode, session_id, transcript_path, hook_event_name, cwd
-PostToolUse → 以上 + duration_ms, tool_response
-SubagentStop→ agent_id, agent_type, last_assistant_message, agent_transcript_path, session_id, ...
-```
-
----
-
 ## 目录结构
 
 ```
@@ -115,10 +86,9 @@ CC可视化/
 ## 自定义
 
 - **改端口**：`CC_VIZ_PORT=5000 node server/server.mjs`，安装时同步 `node install.mjs --port 5000`。
-- **界面文案 / 语言**：所有界面与活动日志文案集中在 `web/i18n.js` 的 `DICT.{zh,en}`；要加第三种语言,复制一份语言块即可。
-- **角色名**：`web/i18n.js` 里的 `role.*` 键(如 `role.Explore`),给常用 `subagent_type` 配专属显示名;工具图标改 `web/app.js` 的 `TOOL_IC`。
+- **角色名 / 工具图标**：编辑 `web/app.js` 顶部的 `NAME` / `TOOL_IC` 映射，给你常用的 `subagent_type`（如 `Explore`、`Plan`、自定义 agent）配专属名称。
 - **章鱼造型 / 动画**：`web/sprites.js` 里全是字符串像素矩阵（一字符一像素），改几个字符就能换造型；`?debug=sprites` 画廊实时预览。
-- **台词库**：`web/dialogue.js` 顶部的 `WORK_BY_TOOL` / `ERROR_QUIPS` / `FACILITY_QUIPS` / `CHAT_PAIRS` 等,均按 `{zh,en}` 分语言,支持 `{tool}{file}{dur}{n}{err}{msg}` 占位符。
+- **台词库**：`web/dialogue.js` 顶部的 `WORK_BY_TOOL` / `ERROR_QUIPS` / `FACILITY_QUIPS` / `CHAT_PAIRS`,直接加中文台词即可,支持 `{tool}{file}{dur}{n}{err}{msg}` 占位符。
 - **办公室布局**：`web/office.js` 顶部的 `FACILITIES` / `DECOR` / 工位常量,改坐标即可挪家具。
 - **状态归约**：所有"事件→状态"逻辑集中在 `server/state.mjs`，要加字段（如 token 用量、错误高亮）改这里即可。
 
